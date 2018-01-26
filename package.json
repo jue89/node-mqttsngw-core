@@ -1,0 +1,45 @@
+{
+  "name": "mqttsngw-core",
+  "version": "0.0.0",
+  "description": "MQTT-SN Gateway: Core module",
+  "main": "index.js",
+  "scripts": {
+    "test": "happiness && jest",
+    "watch": "jest --watchAll"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jue89/node-mqttsngw-core.git"
+  },
+  "keywords": [
+    "mqttsn",
+    "dtls",
+    "sensornet"
+  ],
+  "author": "Jue <me@jue.yt>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jue89/node-mqttsngw-core/issues"
+  },
+  "homepage": "https://github.com/jue89/node-mqttsngw-core#readme",
+  "devDependencies": {
+    "happiness": "^10.0.2",
+    "jest": "^22.1.4"
+  },
+  "happiness": {
+    "globals": [
+      "jest",
+      "describe",
+      "test",
+      "expect",
+      "beforeEach"
+    ]
+  },
+  "jest": {
+    "automock": false,
+    "clearMocks": true
+  },
+  "dependencies": {
+    "edfsm": "^1.0.0"
+  }
+}
