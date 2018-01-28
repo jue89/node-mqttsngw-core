@@ -68,7 +68,8 @@ describe('state: connectBroker', () => {
 			sessionResumed: false
 		});
 		expect(CTX.sessionResumed).toBe(false);
-		expect(CTX.connected).toBe(true);
+		expect(CTX.connectedToBroker).toBe(true);
+		expect(CTX.connectedToClient).toBe(true);
 		expect(connack.mock.calls[0][0]).toMatchObject({
 			clientKey: CTX.clientKey,
 			cmd: 'connack',
@@ -95,15 +96,42 @@ describe('state: connectBroker', () => {
 	});
 });
 
+describe('state: active', () => {
+	test('destroy fms on client disconnect', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToClient: true,
+			connectedToBroker: true
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'disconnect'], {
+			clientKey: CTX.clientKey,
+			cmd: 'disconnect'
+		});
+		expect(fsm.next.mock.calls[0][0]).toBe(null);
+	});
+	test('destroy fms on broker disconnect', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToClient: true,
+			connectedToBroker: true
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmClient(bus).testState('active', CTX);
+		bus.emit(['brokerDisconnect', CTX.clientKey, 'notify'], {
+			clientKey: CTX.clientKey
+		});
+		expect(CTX.connectedToBroker).toBe(false);
+		expect(fsm.next.mock.calls[0][0]).toBe(null);
+	});
+});
+
 describe('final', () => {
 	test('send connack with error if no connection could be established', () => {
 		const CTX = {
 			clientKey: '::1_12345',
-			will: true,
-			willTopic: 'willTopic',
-			willMessage: 'willMessage',
-			cleanSession: true,
-			clientId: 'client'
+			connectedToClient: false
 		};
 		const bus = new EventEmitter();
 		const req = jest.fn();
@@ -113,6 +141,33 @@ describe('final', () => {
 			clientKey: '::1_12345',
 			cmd: 'connack',
 			returnCode: 'Rejected: congestion'
+		});
+	});
+	test('send disconnect to client if connection has been established before', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToClient: true
+		};
+		const bus = new EventEmitter();
+		const req = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'disconnect'], req);
+		fsmClient(bus).testState('_final', CTX);
+		expect(req.mock.calls[0][0]).toMatchObject({
+			clientKey: '::1_12345',
+			cmd: 'disconnect'
+		});
+	});
+	test('send disconnect to broker if connection has been established before', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToBroker: true
+		};
+		const bus = new EventEmitter();
+		const req = jest.fn();
+		bus.on(['brokerDisconnect', CTX.clientKey, 'call'], req);
+		fsmClient(bus).testState('_final', CTX);
+		expect(req.mock.calls[0][0]).toMatchObject({
+			clientKey: '::1_12345'
 		});
 	});
 });

@@ -17,5 +17,8 @@ module.exports = (bus, log) => {
 			});
 		});
 		// TODO: SEARCHGW, ADVERTISE
+	}).final((ctx, i, o, end) => {
+		// TODO: Kill all clients
+		end();
 	});
 };

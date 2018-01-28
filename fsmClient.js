@@ -8,7 +8,8 @@ module.exports = (bus, log) => {
 	}).state('init', (ctx, i, o, next) => {
 		// Convert received packet into context
 		delete ctx.cmd;
-		ctx.connected = false;
+		ctx.connectedToClient = false;
+		ctx.connectedToBroker = false;
 
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
@@ -30,22 +31,32 @@ module.exports = (bus, log) => {
 
 			// Connection was successfully established
 			ctx.sessionResumed = res.sessionResumed;
-			ctx.connected = true;
+			ctx.connectedToBroker = true;
 			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Accepted'
 			});
+			ctx.connectedToClient = true;
 			next('active');
 		});
 
 		// The broker module must return at least a timeout!
 		// -> No next.timeout() in this state.
 	}).state('active', (ctx, i, o, next) => {
-		// TODO
-		next(new Error('active is not implemented'));
+		// Listen for disconnects from client
+		i(['snUnicastIngress', ctx.clientKey, 'disconnect'], (data) => {
+			// TODO: duration? -> sleep instead of disconnect
+			next(null);
+		});
+
+		// Listen for disconnects from broker
+		i(['brokerDisconnect', ctx.clientKey, 'notify'], (data) => {
+			ctx.connectedToBroker = false;
+			next(null);
+		});
 	}).final((ctx, i, o, end, err) => {
-		if (!ctx.connected) {
+		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
 			// while establishing connection
 			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
@@ -54,8 +65,22 @@ module.exports = (bus, log) => {
 				returnCode: 'Rejected: congestion'
 			});
 		} else {
-			// TODO
+			// TODO: Check if error is not null?
+			//       -> Send last will
+
+			// Send disconnect message to client
+			o(['snUnicastOutgress', ctx.clientKey, 'disconnect'], {
+				clientKey: ctx.clientKey,
+				cmd: 'disconnect'
+			});
 		}
+
+		if (ctx.connectedToBroker) {
+			o(['brokerDisconnect', ctx.clientKey, 'call'], {
+				clientKey: ctx.clientKey
+			});
+		}
+
 		end();
 	});
 };
