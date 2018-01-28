@@ -8,6 +8,9 @@ const fsmSubscribe = require('../fsmSubscribe.js');
 jest.mock('../fsmPublishToBroker.js');
 const fsmPublishToBroker = require('../fsmPublishToBroker.js');
 
+jest.mock('../fsmPublishToClient.js');
+const fsmPublishToClient = require('../fsmPublishToClient.js');
+
 const fsmClient = require('../fsmClient.js');
 
 test('init subscribe fsm factory', () => {
@@ -24,6 +27,14 @@ test('init publish to broker fsm factory', () => {
 	fsmClient(BUS, LOG);
 	expect(fsmPublishToBroker.mock.calls[0][0]).toBe(BUS);
 	expect(fsmPublishToBroker.mock.calls[0][1]).toBe(LOG);
+});
+
+test('init publish to client fsm factory', () => {
+	const BUS = {};
+	const LOG = {};
+	fsmClient(BUS, LOG);
+	expect(fsmPublishToClient.mock.calls[0][0]).toBe(BUS);
+	expect(fsmPublishToClient.mock.calls[0][1]).toBe(LOG);
 });
 
 describe('state: init', () => {
@@ -238,6 +249,24 @@ describe('state: active', () => {
 		fsmClient(bus).testState('active', CTX);
 		bus.emit(['snUnicastIngress', CTX.clientKey, 'publish'], PUBLISH);
 		expect(fsmPublishToBroker._run.mock.calls[0][0]).toMatchObject(Object.assign({
+			topics: CTX.topics
+		}, PUBLISH));
+	});
+	test('start new publish to client fsm if publish request has been received from broker', () => {
+		const CTX = {
+			clientKey: '::1_12345'
+		};
+		const PUBLISH = {
+			clientKey: CTX.clientKey,
+			msgId: 123,
+			topic: 'test',
+			qos: 1,
+			payload: Buffer.alloc(1)
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], PUBLISH);
+		expect(fsmPublishToClient._run.mock.calls[0][0]).toMatchObject(Object.assign({
 			topics: CTX.topics
 		}, PUBLISH));
 	});
