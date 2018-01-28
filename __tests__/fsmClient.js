@@ -144,7 +144,7 @@ describe('state: active', () => {
 			clientKey: CTX.clientKey,
 			cmd: 'regack',
 			msgId: 123,
-			topicId: 0,
+			topicId: 1,
 			returnCode: 'Accepted'
 		});
 		expect(CTX.topics[0]).toEqual('testtopic');
