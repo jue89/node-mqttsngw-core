@@ -2,7 +2,18 @@ const EventEmitter = require('eventemitter2');
 
 jest.mock('edfsm');
 
+jest.mock('../fsmSubscribe.js');
+const fsmSubscribe = require('../fsmSubscribe.js');
+
 const fsmClient = require('../fsmClient.js');
+
+test('init subscribe fsm factory', () => {
+	const BUS = {};
+	const LOG = {};
+	fsmClient(BUS, LOG);
+	expect(fsmSubscribe.mock.calls[0][0]).toBe(BUS);
+	expect(fsmSubscribe.mock.calls[0][1]).toBe(LOG);
+});
 
 describe('state: init', () => {
 	test('clean up context', () => {
@@ -177,6 +188,27 @@ describe('state: active', () => {
 		const fsm = fsmClient(bus).testState('active', CTX);
 		expect(fsm.next.timeout.mock.calls[0][0]).toEqual(CTX.duration * 1000);
 		expect(fsm.next.timeout.mock.calls[0][1].message).toEqual('Received no ping requests within given connection duration');
+	});
+	test('start new subscribe fsm if subscribe request has been received from client', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: ['a', 'b']
+		};
+		const SUB = {
+			clientKey: CTX.clientKey,
+			cmd: 'subscribe',
+			msgId: 123,
+			topicIdType: 'normal',
+			topicName: 'testtopic',
+			qos: 1,
+			retain: false
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'subscribe'], SUB);
+		expect(fsmSubscribe._run.mock.calls[0][0]).toMatchObject(Object.assign({
+			topics: CTX.topics
+		}, SUB));
 	});
 });
 
