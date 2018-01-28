@@ -1,10 +1,11 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	return FSM({
-		fsmName: 'PublishToBroker',
+		fsmName: '[Core] PublishToBroker',
 		log: log,
 		input: bus,
-		output: bus
+		output: bus,
+		firstState: 'init'
 	}).state('init', (ctx, i, o, next) => {
 		// TODO: We cannot handle QOS 2 atm ...
 		if (ctx.qos > 1) return next(new Error('Rejected: congestion'));

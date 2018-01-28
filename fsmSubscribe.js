@@ -1,10 +1,11 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	return FSM({
-		fsmName: 'Subscribe',
+		fsmName: '[Core] Subscribe',
 		log: log,
 		input: bus,
-		output: bus
+		output: bus,
+		firstState: 'init'
 	}).state('init', (ctx, i, o, next) => {
 		// Make sure qos is not larger than 1!
 		if (ctx.qos > 1) ctx.qos = 1;

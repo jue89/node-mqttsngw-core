@@ -4,10 +4,11 @@ module.exports = (bus, log) => {
 	const publishToBrokerFactory = require('./fsmPublishToBroker.js')(bus, log);
 	const publishToClientFactory = require('./fsmPublishToClient.js')(bus, log);
 	return FSM({
-		fsmName: 'Client',
+		fsmName: '[Core] Client',
 		log: log,
 		input: bus,
-		output: bus
+		output: bus,
+		firstState: 'init'
 	}).state('init', (ctx, i, o, next) => {
 		// Convert received packet into context
 		delete ctx.cmd;
