@@ -69,6 +69,20 @@ module.exports = (bus, log) => {
 				returnCode: 'Accepted'
 			});
 		});
+
+		// React to ping requests
+		i(['snUnicastIngress', ctx.clientKey, 'pingreq'], () => {
+			o(['snUnicastOutgress', ctx.clientKey, 'pingresp'], {
+				clientKey: ctx.clientKey,
+				cmd: 'pingresp'
+			});
+			// Reenter current state to reset all timeouts
+			next('active');
+		});
+
+		// Timeout after given duration. This will be reset by ping requests.
+		// TODO: Before just disconnecting, maybe try to send a ping request?
+		next.timeout(ctx.duration * 1000, new Error('Received no ping requests within given connection duration'));
 	}).final((ctx, i, o, end, err) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured

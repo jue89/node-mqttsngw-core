@@ -149,6 +149,35 @@ describe('state: active', () => {
 		});
 		expect(CTX.topics[0]).toEqual('testtopic');
 	});
+	test('react to pings', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: []
+		};
+		const bus = new EventEmitter();
+		const res = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'pingresp'], res);
+		const fsm = fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'pingreq'], {
+			clientKey: CTX.clientKey,
+			cmd: 'pingreq'
+		});
+		expect(res.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'pingresp'
+		});
+		expect(fsm.next.mock.calls[0][0]).toEqual('active');
+	});
+	test('timeout after duration exceeded without pings', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			duration: 1234
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmClient(bus).testState('active', CTX);
+		expect(fsm.next.timeout.mock.calls[0][0]).toEqual(CTX.duration * 1000);
+		expect(fsm.next.timeout.mock.calls[0][1].message).toEqual('Received no ping requests within given connection duration');
+	});
 });
 
 describe('final', () => {
