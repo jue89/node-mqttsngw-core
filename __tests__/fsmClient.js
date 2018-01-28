@@ -125,6 +125,30 @@ describe('state: active', () => {
 		expect(CTX.connectedToBroker).toBe(false);
 		expect(fsm.next.mock.calls[0][0]).toBe(null);
 	});
+	test('react to register events', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: []
+		};
+		const bus = new EventEmitter();
+		const ack = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'regack'], ack);
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'register'], {
+			clientKey: CTX.clientKey,
+			cmd: 'register',
+			msgId: 123,
+			topicName: 'testtopic'
+		});
+		expect(ack.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'regack',
+			msgId: 123,
+			topicId: 0,
+			returnCode: 'Accepted'
+		});
+		expect(CTX.topics[0]).toEqual('testtopic');
+	});
 });
 
 describe('final', () => {

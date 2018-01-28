@@ -10,6 +10,7 @@ module.exports = (bus, log) => {
 		delete ctx.cmd;
 		ctx.connectedToClient = false;
 		ctx.connectedToBroker = false;
+		ctx.topics = [];
 
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
@@ -54,6 +55,19 @@ module.exports = (bus, log) => {
 		i(['brokerDisconnect', ctx.clientKey, 'notify'], (data) => {
 			ctx.connectedToBroker = false;
 			next(null);
+		});
+
+		// React to register events
+		i(['snUnicastIngress', ctx.clientKey, 'register'], (data) => {
+			// TODO: Check if space in topic store is left
+			const topicId = ctx.topics.push(data.topicName) - 1;
+			o(['snUnicastOutgress', ctx.clientKey, 'regack'], {
+				clientKey: ctx.clientKey,
+				cmd: 'regack',
+				msgId: data.msgId,
+				topicId: topicId,
+				returnCode: 'Accepted'
+			});
 		});
 	}).final((ctx, i, o, end, err) => {
 		if (!ctx.connectedToClient) {
