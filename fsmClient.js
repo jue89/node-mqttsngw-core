@@ -1,6 +1,7 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	const subscribeFactory = require('./fsmSubscribe.js')(bus, log);
+	const publishToBrokerFactory = require('./fsmPublishToBroker.js')(bus, log);
 	return FSM({
 		fsmName: 'Client',
 		log: log,
@@ -77,7 +78,14 @@ module.exports = (bus, log) => {
 			data.topics = ctx.topics;
 			subscribeFactory.run(data);
 		});
-		// TODO: Handle publish from client
+
+		// Handle publish to broker
+		i(['snUnicastIngress', ctx.clientKey, 'publish'], (data) => {
+			// Kick-off new state machine to handle publish messages
+			data.topics = ctx.topics;
+			publishToBrokerFactory.run(data);
+		});
+
 		// TODO: Handle publish from broker
 		// TODO: Handle will updates
 
