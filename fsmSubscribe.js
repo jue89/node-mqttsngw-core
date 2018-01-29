@@ -25,7 +25,8 @@ module.exports = (bus, log) => {
 		o(['brokerSubscribe', ctx.clientKey, 'req'], {
 			clientKey: ctx.clientKey,
 			msgId: ctx.msgId,
-			topic: ctx.topic
+			topic: ctx.topic,
+			qos: ctx.qos
 		});
 
 		// Wait for the response from the broker

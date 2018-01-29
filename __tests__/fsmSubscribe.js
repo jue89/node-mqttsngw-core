@@ -45,7 +45,8 @@ describe('state: brokerSubscribe', () => {
 		const CTX = {
 			clientKey: '::1_12345',
 			msgId: 123,
-			topic: 'testtopic'
+			topic: 'testtopic',
+			qos: 1
 		};
 		const bus = new EventEmitter();
 		const req = jest.fn();
@@ -54,7 +55,8 @@ describe('state: brokerSubscribe', () => {
 		expect(req.mock.calls[0][0]).toMatchObject({
 			clientKey: CTX.clientKey,
 			msgId: CTX.msgId,
-			topic: CTX.topic
+			topic: CTX.topic,
+			qos: CTX.qos
 		});
 	});
 	test('wait for subscribe response from broker', () => {
