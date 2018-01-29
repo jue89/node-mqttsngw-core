@@ -136,6 +136,6 @@ module.exports = (bus, log) => {
 			});
 		}
 
-		end();
+		end(err);
 	});
 };
