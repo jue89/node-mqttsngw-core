@@ -234,6 +234,21 @@ describe('state: publishToClient', () => {
 		expect(CTX.publishTry).toEqual(4);
 		expect(fsm.next.mock.calls[0][0].message).toEqual('Client has not sent puback');
 	});
+	test('send register request of client reported invalid topic id', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			qos: 1,
+			msgId: 123
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmPublishToClient(bus).testState('publishToClient', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'puback'], {
+			clientKey: CTX.clientKey,
+			msgId: CTX.msgId,
+			returnCode: 'Rejected: invalid topic ID'
+		});
+		expect(fsm.next.mock.calls[0][0]).toEqual('registerTopic');
+	});
 });
 
 describe('final', () => {

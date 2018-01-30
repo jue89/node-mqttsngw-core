@@ -70,6 +70,7 @@ module.exports = (bus, log) => {
 		// Wait for puback
 		i(['snUnicastIngress', ctx.clientKey, 'puback'], (data) => {
 			if (data.msgId !== ctx.msgId) return;
+			if (data.returnCode === 'Rejected: invalid topic ID') return next('registerTopic');
 			if (data.returnCode !== 'Accepted') return next(new Error(data.returnCode));
 			next(null);
 		});
