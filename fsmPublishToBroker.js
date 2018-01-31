@@ -31,7 +31,8 @@ module.exports = (bus, log) => {
 			msgId: ctx.msgId,
 			qos: ctx.qos,
 			topic: ctx.topic,
-			payload: ctx.payload
+			payload: ctx.payload,
+			retain: ctx.retain
 		});
 
 		// Wait for response from broker

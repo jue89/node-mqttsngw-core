@@ -64,7 +64,8 @@ describe('state: publishToBroker', () => {
 			msgId: 12345,
 			topic: 'test',
 			payload: Buffer.from('a'),
-			qos: 0
+			qos: 0,
+			retain: true
 		};
 		const bus = new EventEmitter();
 		const req = jest.fn();
@@ -75,7 +76,8 @@ describe('state: publishToBroker', () => {
 			msgId: CTX.msgId,
 			topic: CTX.topic,
 			qos: CTX.qos,
-			payload: CTX.payload
+			payload: CTX.payload,
+			retain: CTX.retain
 		});
 	});
 	test('goto final if broker replies with response', () => {

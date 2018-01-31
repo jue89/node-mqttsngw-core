@@ -1,7 +1,7 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	return FSM({
-		fsmName: '[Core] PublishToBroker',
+		fsmName: '[Core] PublishToClient',
 		log: log,
 		input: bus,
 		output: bus,
