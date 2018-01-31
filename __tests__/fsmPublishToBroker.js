@@ -156,7 +156,8 @@ describe('final', () => {
 		const CTX = {
 			clientKey: '::1_12345',
 			msgId: 123,
-			qos: 1
+			qos: 1,
+			topicId: 342
 		};
 		const bus = new EventEmitter();
 		const ack = jest.fn();
@@ -166,6 +167,7 @@ describe('final', () => {
 			clientKey: CTX.clientKey,
 			cmd: 'puback',
 			msgId: CTX.msgId,
+			topicId: CTX.topicId,
 			returnCode: 'Accepted'
 		});
 	});

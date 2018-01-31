@@ -13,13 +13,9 @@ module.exports = (bus, log) => {
 		// Handle given topic
 		if (ctx.topicIdType === 'normal' && ctx.topics[ctx.topicId - 1]) {
 			ctx.topic = ctx.topics[ctx.topicId - 1];
-			delete ctx.topicIdType;
-			delete ctx.topicId;
 			next('publishToBroker');
 		} else if (ctx.topicIdType === 'short topic') {
 			ctx.topic = ctx.topicId;
-			delete ctx.topicIdType;
-			delete ctx.topicId;
 			next('publishToBroker');
 		} else {
 			next(new Error('Rejected: invalid topic ID'));
@@ -59,6 +55,7 @@ module.exports = (bus, log) => {
 				clientKey: ctx.clientKey,
 				cmd: 'puback',
 				msgId: ctx.msgId,
+				topicId: ctx.topicId,
 				returnCode: 'Accepted'
 			});
 		}
