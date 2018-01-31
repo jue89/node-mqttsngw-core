@@ -54,3 +54,12 @@ describe('state: listening', () => {
 		expect(Object.keys(CTX.clients).length).toEqual(0);
 	});
 });
+
+describe('final', () => {
+	test('close connection to all clients', () => {
+		const next = jest.fn();
+		const CTX = { clients: { 'a': { next } } };
+		fsmMain().testState('_final', CTX);
+		expect(next.mock.calls[0][0]).toBe(null);
+	});
+});

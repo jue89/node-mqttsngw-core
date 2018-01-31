@@ -19,7 +19,9 @@ module.exports = (bus, log) => {
 		});
 		// TODO: SEARCHGW, ADVERTISE
 	}).final((ctx, i, o, end) => {
-		// TODO: Kill all clients
+		Object.keys(ctx.clients).forEach((key) => {
+			ctx.clients[key].next(null);
+		});
 		end();
 	});
 };
