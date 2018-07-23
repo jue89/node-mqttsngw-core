@@ -1,6 +1,7 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	const subscribeFactory = require('./fsmSubscribe.js')(bus, log);
+	const unsubscribeFactory = require('./fsmUnsubscribe.js')(bus, log);
 	const publishToBrokerFactory = require('./fsmPublishToBroker.js')(bus, log);
 	const publishToClientFactory = require('./fsmPublishToClient.js')(bus, log);
 	return FSM({
@@ -81,6 +82,12 @@ module.exports = (bus, log) => {
 			subscribeFactory.run(data);
 		});
 
+		// Handle unsubscribe
+		i(['snUnicastIngress', ctx.clientKey, 'unsubscribe'], (data) => {
+			// Kick-off new state machine to handle subscribe messages
+			unsubscribeFactory.run(data);
+		});
+
 		// Handle publish to broker
 		i(['snUnicastIngress', ctx.clientKey, 'publish'], (data) => {
 			// Kick-off new state machine to handle publish messages
@@ -95,7 +102,6 @@ module.exports = (bus, log) => {
 		});
 
 		// TODO: Handle will updates
-		// TODO: Handle unsubscribe
 
 		// React to ping requests
 		i(['snUnicastIngress', ctx.clientKey, 'pingreq'], () => {

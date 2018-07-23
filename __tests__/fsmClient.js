@@ -5,6 +5,9 @@ jest.mock('edfsm');
 jest.mock('../fsmSubscribe.js');
 const fsmSubscribe = require('../fsmSubscribe.js');
 
+jest.mock('../fsmUnsubscribe.js');
+const fsmUnsubscribe = require('../fsmUnsubscribe.js');
+
 jest.mock('../fsmPublishToBroker.js');
 const fsmPublishToBroker = require('../fsmPublishToBroker.js');
 
@@ -230,6 +233,23 @@ describe('state: active', () => {
 		expect(fsmSubscribe._run.mock.calls[0][0]).toMatchObject(Object.assign({
 			topics: CTX.topics
 		}, SUB));
+	});
+	test('start new unsubscribe fsm if unsubscribe request has been received from client', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: ['a', 'b']
+		};
+		const SUB = {
+			clientKey: CTX.clientKey,
+			cmd: 'unsubscribe',
+			msgId: 123,
+			topicIdType: 'normal',
+			topicName: 'testtopic'
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'unsubscribe'], SUB);
+		expect(fsmUnsubscribe._run.mock.calls[0][0]).toMatchObject(SUB);
 	});
 	test('start new publish to broker fsm if publish request has been received from client', () => {
 		const CTX = {
