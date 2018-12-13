@@ -17,6 +17,9 @@ module.exports = (bus, log) => {
 		ctx.connectedToBroker = false;
 		ctx.topics = [];
 
+		// Create promise for for conack
+		ctx.connack = new Promise((resolve) => { ctx.connackResolve = resolve; });
+
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
 		else next('connectBroker');
@@ -38,11 +41,13 @@ module.exports = (bus, log) => {
 			// Connection was successfully established
 			ctx.sessionResumed = res.sessionResumed;
 			ctx.connectedToBroker = true;
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			const connack = {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Accepted'
-			});
+			};
+			ctx.connackResolve(connack);
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 			ctx.connectedToClient = true;
 			next('active');
 		});
@@ -120,11 +125,13 @@ module.exports = (bus, log) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
 			// while establishing connection
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			const connack = {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Rejected: congestion'
-			});
+			};
+			ctx.connackResolve(connack);
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 		} else {
 			// TODO: Check if error is not null?
 			//       -> Send last will
