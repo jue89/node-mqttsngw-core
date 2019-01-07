@@ -197,6 +197,30 @@ describe('state: active', () => {
 		});
 		expect(CTX.topics[0]).toEqual('testtopic');
 	});
+	test('reuse topic IDs if topic has been registered in the past', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: ['a', 'b']
+		};
+		const bus = new EventEmitter();
+		const ack = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'regack'], ack);
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'register'], {
+			clientKey: CTX.clientKey,
+			cmd: 'register',
+			msgId: 123,
+			topicName: 'a'
+		});
+		expect(CTX.topics.length).toEqual(2);
+		expect(ack.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'regack',
+			msgId: 123,
+			topicId: 1,
+			returnCode: 'Accepted'
+		});
+	});
 	test('react to pings', () => {
 		const CTX = {
 			clientKey: '::1_12345',

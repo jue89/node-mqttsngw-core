@@ -70,7 +70,8 @@ module.exports = (bus, log) => {
 		// React to register events
 		i(['snUnicastIngress', ctx.clientKey, 'register'], (data) => {
 			// TODO: Check if space in topic store is left
-			const topicId = ctx.topics.push(data.topicName);
+			let topicId = ctx.topics.indexOf(data.topicName) + 1;
+			if (topicId === 0) topicId = ctx.topics.push(data.topicName);
 			o(['snUnicastOutgress', ctx.clientKey, 'regack'], {
 				clientKey: ctx.clientKey,
 				cmd: 'regack',
