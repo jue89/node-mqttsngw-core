@@ -1,6 +1,7 @@
 const FSM = require('edfsm');
 module.exports = (bus, log) => {
 	const subscribeFactory = require('./fsmSubscribe.js')(bus, log);
+	const unsubscribeFactory = require('./fsmUnsubscribe.js')(bus, log);
 	const publishToBrokerFactory = require('./fsmPublishToBroker.js')(bus, log);
 	const publishToClientFactory = require('./fsmPublishToClient.js')(bus, log);
 	return FSM({
@@ -15,6 +16,9 @@ module.exports = (bus, log) => {
 		ctx.connectedToClient = false;
 		ctx.connectedToBroker = false;
 		ctx.topics = [];
+
+		// Create promise for for conack
+		ctx.connack = new Promise((resolve) => { ctx.connackResolve = resolve; });
 
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
@@ -37,11 +41,13 @@ module.exports = (bus, log) => {
 			// Connection was successfully established
 			ctx.sessionResumed = res.sessionResumed;
 			ctx.connectedToBroker = true;
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			const connack = {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Accepted'
-			});
+			};
+			ctx.connackResolve(connack);
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 			ctx.connectedToClient = true;
 			next('active');
 		});
@@ -64,7 +70,8 @@ module.exports = (bus, log) => {
 		// React to register events
 		i(['snUnicastIngress', ctx.clientKey, 'register'], (data) => {
 			// TODO: Check if space in topic store is left
-			const topicId = ctx.topics.push(data.topicName);
+			let topicId = ctx.topics.indexOf(data.topicName) + 1;
+			if (topicId === 0) topicId = ctx.topics.push(data.topicName);
 			o(['snUnicastOutgress', ctx.clientKey, 'regack'], {
 				clientKey: ctx.clientKey,
 				cmd: 'regack',
@@ -81,6 +88,12 @@ module.exports = (bus, log) => {
 			subscribeFactory.run(data);
 		});
 
+		// Handle unsubscribe
+		i(['snUnicastIngress', ctx.clientKey, 'unsubscribe'], (data) => {
+			// Kick-off new state machine to handle subscribe messages
+			unsubscribeFactory.run(data);
+		});
+
 		// Handle publish to broker
 		i(['snUnicastIngress', ctx.clientKey, 'publish'], (data) => {
 			// Kick-off new state machine to handle publish messages
@@ -95,7 +108,6 @@ module.exports = (bus, log) => {
 		});
 
 		// TODO: Handle will updates
-		// TODO: Handle unsubscribe
 
 		// React to ping requests
 		i(['snUnicastIngress', ctx.clientKey, 'pingreq'], () => {
@@ -114,11 +126,13 @@ module.exports = (bus, log) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
 			// while establishing connection
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			const connack = {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Rejected: congestion'
-			});
+			};
+			ctx.connackResolve(connack);
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 		} else {
 			// TODO: Check if error is not null?
 			//       -> Send last will

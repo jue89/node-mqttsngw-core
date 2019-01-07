@@ -65,11 +65,13 @@ Several events are consumed and emitted by the *Core* module on the event bus.
 | snUnicastIngress,*,disconnect  | [Core] Client          | Sensor sent disconnect |
 | snUnicastIngress,*,register    | [Core] Client          | Sensor registers a new topic name |
 | snUnicastIngress,*,subscribe   | [Core] Client          | Sensor subscribes to a new topic |
+| snUnicastIngress,*,unsubscribe | [Core] Client          | Sensor unsubscribes from a topic |
 | snUnicastIngress,*,publish     | [Core] Client          | Sensor publishes a message |
 | snUnicastIngress,*,pingreq     | [Core] Client          | Sensor sent ping request |
 | brokerDisconnect,*,notify      | [Core] Client          | Connection to the broker has been disconnected |
 | brokerPublishToClient,*,req    | [Core] Client          | A message shall be sent from the broker to the sensor |
 | brokerSubscribe,*,res          | [Core] Subscribe       | Response to a subscription request |
+| brokerUnsubscribe,*,res        | [Core] Unsubscribe     | Response to a desubscription request |
 | brokerPublishFromClient,*,res  | [Core] PublishToBroker | Response to a publish to broker request |
 | snUnicastIngress,*,regack      | [Core] PublishToClient | Reaction to a register request from the sensor |
 | snUnicastIngress,*,puback      | [Core] PublishToClient | Reaction to a publish request from the sensor |
@@ -87,6 +89,8 @@ Several events are consumed and emitted by the *Core* module on the event bus.
 | snUnicastOutgress,*,pingresp   | [Core] Client          | Respond to a ping request |
 | brokerSubscribe,*,req          | [Core] Subscribe       | Subscribes a topic at the broker |
 | snUnicastOutgress,*,suback     | [Core] Subscribe       | Respond to a subscription request |
+| brokerUnsubscribe,*,req        | [Core] Unsubscribe     | Unsubscribes a topic at the broker |
+| snUnicastOutgress,*,unsuback   | [Core] Unsubscribe     | Respond to a desubscription request |
 | brokerPublishFromClient,*,req  | [Core] PublishToBroker | Publish a message to the broker |
 | snUnicastOutgress,*,puback     | [Core] PublishToBroker | Send PUBACK to the sensor |
 | snUnicastOutgress,*,register   | [Core] PublishToClient | Register a topic at the sensor |

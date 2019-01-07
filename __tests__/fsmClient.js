@@ -5,6 +5,9 @@ jest.mock('edfsm');
 jest.mock('../fsmSubscribe.js');
 const fsmSubscribe = require('../fsmSubscribe.js');
 
+jest.mock('../fsmUnsubscribe.js');
+const fsmUnsubscribe = require('../fsmUnsubscribe.js');
+
 jest.mock('../fsmPublishToBroker.js');
 const fsmPublishToBroker = require('../fsmPublishToBroker.js');
 
@@ -50,6 +53,12 @@ describe('state: init', () => {
 		fsmClient().testState('init', CTX);
 		expect(CTX.cmd).toBeUndefined();
 	});
+	test('prepare connack promise', () => {
+		const CTX = {};
+		fsmClient().testState('init', CTX);
+		expect(CTX.connack).toBeInstanceOf(Promise);
+		expect(CTX.connackResolve).toBeInstanceOf(Function);
+	});
 	test('request will topic if will is true', () => {
 		const CTX = {
 			will: true
@@ -89,7 +98,8 @@ describe('state: connectBroker', () => {
 			willTopic: 'willTopic',
 			willMessage: 'willMessage',
 			cleanSession: true,
-			clientId: 'client'
+			clientId: 'client',
+			connackResolve: jest.fn()
 		};
 		const bus = new EventEmitter();
 		const connack = jest.fn();
@@ -104,6 +114,11 @@ describe('state: connectBroker', () => {
 		expect(CTX.connectedToBroker).toBe(true);
 		expect(CTX.connectedToClient).toBe(true);
 		expect(connack.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'connack',
+			returnCode: 'Accepted'
+		});
+		expect(CTX.connackResolve.mock.calls[0][0]).toMatchObject({
 			clientKey: CTX.clientKey,
 			cmd: 'connack',
 			returnCode: 'Accepted'
@@ -182,6 +197,30 @@ describe('state: active', () => {
 		});
 		expect(CTX.topics[0]).toEqual('testtopic');
 	});
+	test('reuse topic IDs if topic has been registered in the past', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: ['a', 'b']
+		};
+		const bus = new EventEmitter();
+		const ack = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'regack'], ack);
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'register'], {
+			clientKey: CTX.clientKey,
+			cmd: 'register',
+			msgId: 123,
+			topicName: 'a'
+		});
+		expect(CTX.topics.length).toEqual(2);
+		expect(ack.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'regack',
+			msgId: 123,
+			topicId: 1,
+			returnCode: 'Accepted'
+		});
+	});
 	test('react to pings', () => {
 		const CTX = {
 			clientKey: '::1_12345',
@@ -231,6 +270,23 @@ describe('state: active', () => {
 			topics: CTX.topics
 		}, SUB));
 	});
+	test('start new unsubscribe fsm if unsubscribe request has been received from client', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			topics: ['a', 'b']
+		};
+		const SUB = {
+			clientKey: CTX.clientKey,
+			cmd: 'unsubscribe',
+			msgId: 123,
+			topicIdType: 'normal',
+			topicName: 'testtopic'
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'unsubscribe'], SUB);
+		expect(fsmUnsubscribe._run.mock.calls[0][0]).toMatchObject(SUB);
+	});
 	test('start new publish to broker fsm if publish request has been received from client', () => {
 		const CTX = {
 			clientKey: '::1_12345'
@@ -276,13 +332,19 @@ describe('final', () => {
 	test('send connack with error if no connection could be established', () => {
 		const CTX = {
 			clientKey: '::1_12345',
-			connectedToClient: false
+			connectedToClient: false,
+			connackResolve: jest.fn()
 		};
 		const bus = new EventEmitter();
 		const req = jest.fn();
 		bus.on(['snUnicastOutgress', CTX.clientKey, 'connack'], req);
 		fsmClient(bus).testState('_final', CTX);
 		expect(req.mock.calls[0][0]).toMatchObject({
+			clientKey: '::1_12345',
+			cmd: 'connack',
+			returnCode: 'Rejected: congestion'
+		});
+		expect(CTX.connackResolve.mock.calls[0][0]).toMatchObject({
 			clientKey: '::1_12345',
 			cmd: 'connack',
 			returnCode: 'Rejected: congestion'
@@ -305,6 +367,7 @@ describe('final', () => {
 	test('send disconnect to broker if connection has been established before', () => {
 		const CTX = {
 			clientKey: '::1_12345',
+			connectedToClient: true,
 			connectedToBroker: true
 		};
 		const bus = new EventEmitter();
