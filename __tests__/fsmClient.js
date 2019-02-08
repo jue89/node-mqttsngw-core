@@ -229,7 +229,7 @@ describe('state: active', () => {
 		const bus = new EventEmitter();
 		const res = jest.fn();
 		bus.on(['snUnicastOutgress', CTX.clientKey, 'pingresp'], res);
-		const fsm = fsmClient(bus).testState('active', CTX);
+		fsmClient(bus).testState('active', CTX);
 		bus.emit(['snUnicastIngress', CTX.clientKey, 'pingreq'], {
 			clientKey: CTX.clientKey,
 			cmd: 'pingreq'
@@ -238,9 +238,8 @@ describe('state: active', () => {
 			clientKey: CTX.clientKey,
 			cmd: 'pingresp'
 		});
-		expect(fsm.next.mock.calls[0][0]).toEqual('active');
 	});
-	test('timeout after duration exceeded without pings', () => {
+	test('timeout after duration exceeded without packets', () => {
 		const CTX = {
 			clientKey: '::1_12345',
 			duration: 1234
@@ -249,6 +248,21 @@ describe('state: active', () => {
 		const fsm = fsmClient(bus).testState('active', CTX);
 		expect(fsm.next.timeout.mock.calls[0][0]).toEqual(CTX.duration * 1000);
 		expect(fsm.next.timeout.mock.calls[0][1].message).toEqual('Received no ping requests within given connection duration');
+	});
+	test('retrigger timeout on ingress packets', () => {
+		const CTX = { clientKey: '::1_12345', duration: 1234, topics: [] };
+		const PACKETS = [
+			{ clientKey: CTX.clientKey, cmd: 'subscribe' },
+			{ clientKey: CTX.clientKey, cmd: 'publish' },
+			{ clientKey: CTX.clientKey, cmd: 'register', topicName: 'testtopic' },
+			{ clientKey: CTX.clientKey, cmd: 'pingreq' }
+		];
+		const bus = new EventEmitter({wildcard: true});
+		const fsm = fsmClient(bus).testState('active', CTX);
+		PACKETS.forEach((p, n) => {
+			bus.emit(['snUnicastIngress', CTX.clientKey, p.cmd], p);
+			expect(fsm.next.timeout.mock.calls[n + 1][0]).toEqual(CTX.duration * 1000);
+		});
 	});
 	test('start new subscribe fsm if subscribe request has been received from client', () => {
 		const CTX = {

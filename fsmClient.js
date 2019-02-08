@@ -115,13 +115,14 @@ module.exports = (bus, log) => {
 				clientKey: ctx.clientKey,
 				cmd: 'pingresp'
 			});
-			// Reenter current state to reset all timeouts
-			next('active');
 		});
 
-		// Timeout after given duration. This will be reset by ping requests.
-		// TODO: Before just disconnecting, maybe try to send a ping request?
-		next.timeout(ctx.duration * 1000, new Error('Received no ping requests within given connection duration'));
+		// Timeout after given duration. This will be reset by any ingress packet.
+		i(['snUnicastIngress', ctx.clientKey, '*'], () => timeoutTrigger());
+		timeoutTrigger();
+		function timeoutTrigger () {
+			next.timeout(ctx.duration * 1000, new Error('Received no ping requests within given connection duration'));
+		}
 	}).final((ctx, i, o, end, err) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
