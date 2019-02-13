@@ -21,20 +21,20 @@ module.exports = (bus, log) => {
 			next(new Error('Rejected: invalid topic ID'));
 		}
 	}).state('brokerSubscribe', (ctx, i, o, next) => {
-		// Send subscribe request to broker
-		o(['brokerSubscribe', ctx.clientKey, 'req'], {
-			clientKey: ctx.clientKey,
-			msgId: ctx.msgId,
-			topic: ctx.topic,
-			qos: ctx.qos
-		});
-
 		// Wait for the response from the broker
 		i(['brokerSubscribe', ctx.clientKey, 'res'], (data) => {
 			if (data.msgId !== ctx.msgId) return;
 			if (data.error) return next(new Error('Rejected: congestion'));
 			ctx.qos = data.qos;
 			next(null);
+		});
+
+		// Send subscribe request to broker
+		o(['brokerSubscribe', ctx.clientKey, 'req'], {
+			clientKey: ctx.clientKey,
+			msgId: ctx.msgId,
+			topic: ctx.topic,
+			qos: ctx.qos
 		});
 	}).final((ctx, i, o, end, err) => {
 		// An error occured -> send negative SUBACK
