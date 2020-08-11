@@ -104,7 +104,13 @@ module.exports = (bus, log) => {
 		i(['brokerPublishToClient', ctx.clientKey, 'req'], (data) => {
 			// Kick-off new state machine to handle publish messages
 			data.topics = ctx.topics;
-			publishToClientFactory.run(data);
+			publishToClientFactory.run(data, (err) => {
+				o(['brokerPublishToClient', ctx.clientKey, 'res'], {
+					clientKey: ctx.clientKey,
+					msgId: data.msgId,
+					error: (err instanceof Error) ? err.message : null
+				});
+			});
 		});
 
 		// TODO: Handle will updates

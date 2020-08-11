@@ -322,7 +322,7 @@ describe('state: active', () => {
 			topics: CTX.topics
 		}, PUBLISH));
 	});
-	test('start new publish to client fsm if publish request has been received from broker', () => {
+	test('start new publish to client fsm if publish request has been received from broker and report success', () => {
 		const CTX = {
 			clientKey: '::1_12345'
 		};
@@ -339,6 +339,41 @@ describe('state: active', () => {
 		expect(fsmPublishToClient._run.mock.calls[0][0]).toMatchObject(Object.assign({
 			topics: CTX.topics
 		}, PUBLISH));
+		const onRes = jest.fn();
+		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], onRes);
+		fsmPublishToClient._run.mock.calls[0][1](null);
+		expect(onRes.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			msgId: PUBLISH.msgId,
+			error: null
+		});
+	});
+	test('start new publish to client fsm if publish request has been received from broker and report failure', () => {
+		const CTX = {
+			clientKey: '::1_12345'
+		};
+		const PUBLISH = {
+			clientKey: CTX.clientKey,
+			msgId: 123,
+			topic: 'test',
+			qos: 1,
+			payload: Buffer.alloc(1)
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], PUBLISH);
+		expect(fsmPublishToClient._run.mock.calls[0][0]).toMatchObject(Object.assign({
+			topics: CTX.topics
+		}, PUBLISH));
+		const onRes = jest.fn();
+		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], onRes);
+		const err = new Error('foo');
+		fsmPublishToClient._run.mock.calls[0][1](err);
+		expect(onRes.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			msgId: PUBLISH.msgId,
+			error: err.message
+		});
 	});
 });
 

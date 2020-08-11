@@ -250,37 +250,3 @@ describe('state: publishToClient', () => {
 		expect(fsm.next.mock.calls[0][0]).toEqual('registerTopic');
 	});
 });
-
-describe('final', () => {
-	test('forward errors to broker if some occured', () => {
-		const CTX = {
-			clientKey: '::1_12345',
-			msgId: 123
-		};
-		const ERR = new Error('Rejected: invalid topic ID');
-		const bus = new EventEmitter();
-		const res = jest.fn();
-		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], res);
-		fsmPublishToClient(bus).testState('_final', CTX, ERR);
-		expect(res.mock.calls[0][0]).toMatchObject({
-			clientKey: CTX.clientKey,
-			msgId: CTX.msgId,
-			error: ERR.message
-		});
-	});
-	test('report success if no errors occured', () => {
-		const CTX = {
-			clientKey: '::1_12345',
-			msgId: 123
-		};
-		const bus = new EventEmitter();
-		const res = jest.fn();
-		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], res);
-		fsmPublishToClient(bus).testState('_final', CTX);
-		expect(res.mock.calls[0][0]).toMatchObject({
-			clientKey: CTX.clientKey,
-			msgId: CTX.msgId,
-			error: null
-		});
-	});
-});

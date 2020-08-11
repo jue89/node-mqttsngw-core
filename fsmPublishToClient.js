@@ -74,21 +74,5 @@ module.exports = (bus, log) => {
 			if (data.returnCode !== 'Accepted') return next(new Error(data.returnCode));
 			next(null);
 		});
-	}).final((ctx, i, o, end, err) => {
-		// Forward errors to broker
-		if (err instanceof Error) {
-			o(['brokerPublishToClient', ctx.clientKey, 'res'], {
-				clientKey: ctx.clientKey,
-				msgId: ctx.msgId,
-				error: err.message
-			});
-		} else {
-			o(['brokerPublishToClient', ctx.clientKey, 'res'], {
-				clientKey: ctx.clientKey,
-				msgId: ctx.msgId,
-				error: null
-			});
-		}
-		end();
 	});
 };
