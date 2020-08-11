@@ -56,8 +56,6 @@ describe('state: init', () => {
 	test('prepare connack promise', () => {
 		const CTX = {};
 		fsmClient().testState('init', CTX);
-		expect(CTX.connack).toBeInstanceOf(Promise);
-		expect(CTX.connackResolve).toBeInstanceOf(Function);
 	});
 	test('request will topic if will is true', () => {
 		const CTX = {
@@ -98,12 +96,9 @@ describe('state: connectBroker', () => {
 			willTopic: 'willTopic',
 			willMessage: 'willMessage',
 			cleanSession: true,
-			clientId: 'client',
-			connackResolve: jest.fn()
+			clientId: 'client'
 		};
 		const bus = new EventEmitter();
-		const connack = jest.fn();
-		bus.on(['snUnicastOutgress', CTX.clientKey, 'connack'], connack);
 		const fsm = fsmClient(bus).testState('connectBroker', CTX);
 		bus.emit(['brokerConnect', CTX.clientKey, 'res'], {
 			clientKey: CTX.clientKey,
@@ -113,16 +108,6 @@ describe('state: connectBroker', () => {
 		expect(CTX.sessionResumed).toBe(false);
 		expect(CTX.connectedToBroker).toBe(true);
 		expect(CTX.connectedToClient).toBe(true);
-		expect(connack.mock.calls[0][0]).toMatchObject({
-			clientKey: CTX.clientKey,
-			cmd: 'connack',
-			returnCode: 'Accepted'
-		});
-		expect(CTX.connackResolve.mock.calls[0][0]).toMatchObject({
-			clientKey: CTX.clientKey,
-			cmd: 'connack',
-			returnCode: 'Accepted'
-		});
 		expect(fsm.next.mock.calls[0][0]).toEqual('active');
 	});
 	test('wait for broker response and goto final if connection was not successful', () => {
@@ -145,6 +130,37 @@ describe('state: connectBroker', () => {
 });
 
 describe('state: active', () => {
+	test('send connack', () => {
+		const CTX = {
+			connackResolve: jest.fn(),
+			clientKey: '::1_12345'
+		};
+		const bus = new EventEmitter();
+		const onConnack = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'connack'], onConnack);
+		fsmClient(bus).testState('active', CTX);
+		expect(onConnack.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'connack',
+			returnCode: 'Accepted'
+		});
+	});
+	test('reenter state on connect message', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			duration: 456
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmClient(bus).testState('active', CTX);
+		const duration = 123;
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'connect'], {
+			clientKey: CTX.clientKey,
+			cmd: 'connect',
+			duration
+		});
+		expect(fsm.next.mock.calls[0][0]).toEqual('active');
+		expect(CTX.duration).toBe(duration);
+	});
 	test('destroy fms on client disconnect', () => {
 		const CTX = {
 			clientKey: '::1_12345',
@@ -250,7 +266,11 @@ describe('state: active', () => {
 		expect(fsm.next.timeout.mock.calls[0][1].message).toEqual('Received no ping requests within given connection duration');
 	});
 	test('retrigger timeout on ingress packets', () => {
-		const CTX = { clientKey: '::1_12345', duration: 1234, topics: [] };
+		const CTX = {
+			clientKey: '::1_12345',
+			duration: 1234,
+			topics: []
+		};
 		const PACKETS = [
 			{ clientKey: CTX.clientKey, cmd: 'subscribe' },
 			{ clientKey: CTX.clientKey, cmd: 'publish' },
@@ -381,19 +401,13 @@ describe('final', () => {
 	test('send connack with error if no connection could be established', () => {
 		const CTX = {
 			clientKey: '::1_12345',
-			connectedToClient: false,
-			connackResolve: jest.fn()
+			connectedToClient: false
 		};
 		const bus = new EventEmitter();
 		const req = jest.fn();
 		bus.on(['snUnicastOutgress', CTX.clientKey, 'connack'], req);
 		fsmClient(bus).testState('_final', CTX);
 		expect(req.mock.calls[0][0]).toMatchObject({
-			clientKey: '::1_12345',
-			cmd: 'connack',
-			returnCode: 'Rejected: congestion'
-		});
-		expect(CTX.connackResolve.mock.calls[0][0]).toMatchObject({
 			clientKey: '::1_12345',
 			cmd: 'connack',
 			returnCode: 'Rejected: congestion'

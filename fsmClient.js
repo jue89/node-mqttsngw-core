@@ -17,9 +17,6 @@ module.exports = (bus, log) => {
 		ctx.connectedToBroker = false;
 		ctx.topics = [];
 
-		// Create promise for for conack
-		ctx.connack = new Promise((resolve) => { ctx.connackResolve = resolve; });
-
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
 		else next('connectBroker');
@@ -41,13 +38,6 @@ module.exports = (bus, log) => {
 			// Connection was successfully established
 			ctx.sessionResumed = res.sessionResumed;
 			ctx.connectedToBroker = true;
-			const connack = {
-				clientKey: ctx.clientKey,
-				cmd: 'connack',
-				returnCode: 'Accepted'
-			};
-			ctx.connackResolve(connack);
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 			ctx.connectedToClient = true;
 			next('active');
 		});
@@ -55,6 +45,21 @@ module.exports = (bus, log) => {
 		// The broker module must return at least a timeout!
 		// -> No next.timeout() in this state.
 	}).state('active', (ctx, i, o, next) => {
+		// Send connack
+		o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			clientKey: ctx.clientKey,
+			cmd: 'connack',
+			returnCode: 'Accepted'
+		});
+
+		// React to CONNECT requests, as well.
+		// They may be sent if our CONNACK hasn't be heard.
+		i(['snUnicastIngress', ctx.clientKey, 'connect'], (data) => {
+			// Update duration, all other options are ignored
+			ctx.duration = data.duration;
+			next('active');
+		});
+
 		// Listen for disconnects from client
 		i(['snUnicastIngress', ctx.clientKey, 'disconnect'], (data) => {
 			// TODO: duration? -> sleep instead of disconnect
@@ -133,13 +138,11 @@ module.exports = (bus, log) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
 			// while establishing connection
-			const connack = {
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Rejected: congestion'
-			};
-			ctx.connackResolve(connack);
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
+			});
 		} else {
 			// TODO: Check if error is not null?
 			//       -> Send last will
