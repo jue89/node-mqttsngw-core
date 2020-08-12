@@ -28,6 +28,7 @@ Reflects the current sensor state.
  * **willMessage**: Waits for a will message sent by the sensor.
  * **connectBroker**: Tries to connect to the broker.
  * **active**: The sensor is connected. Depending on the received sensor messages, it will start the state machines *[Core] Subscribe*, *[Core] PublishToBroker* or *[Core] PublishToClient*.
+ * **sleep**: The sensor may enter sleep state by stating a non-zero duration in the DISCONNECT packet. The gateway will collect ingress publishes from the broker and sends them to the sensores once it's active again.
 
 ### [Core] Subscribe
 

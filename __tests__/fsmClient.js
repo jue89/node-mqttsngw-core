@@ -175,6 +175,23 @@ describe('state: active', () => {
 		});
 		expect(fsm.next.mock.calls[0][0]).toBe(null);
 	});
+	test('go to sleep state', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToClient: true,
+			connectedToBroker: true
+		};
+		const bus = new EventEmitter();
+		const fsm = fsmClient(bus).testState('active', CTX);
+		const duration = 123;
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'disconnect'], {
+			clientKey: CTX.clientKey,
+			cmd: 'disconnect',
+			duration
+		});
+		expect(fsm.next.mock.calls[0][0]).toEqual('sleep');
+		expect(CTX.sleepDuration).toBe(duration);
+	});
 	test('destroy fms on broker disconnect', () => {
 		const CTX = {
 			clientKey: '::1_12345',
@@ -394,6 +411,137 @@ describe('state: active', () => {
 			msgId: PUBLISH.msgId,
 			error: err.message
 		});
+	});
+});
+
+describe('sleep', () => {
+	test('emit disconenct packet on state enter', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			sleepDuration: 1234
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const onDisconnect = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'disconnect'], onDisconnect);
+		fsmClient(bus).testState('sleep', CTX);
+		expect(onDisconnect.mock.calls[0][0]).toMatchObject({
+			cmd: 'disconnect',
+			clientKey: CTX.clientKey,
+			duration: CTX.sleepDuration
+		});
+	});
+	test('timeout handling', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			sleepDuration: 1234
+		};
+		const PACKETS = [
+			{ clientKey: CTX.clientKey, cmd: 'subscribe' },
+			{ clientKey: CTX.clientKey, cmd: 'publish' },
+			{ clientKey: CTX.clientKey, cmd: 'register', topicName: 'testtopic' },
+			{ clientKey: CTX.clientKey, cmd: 'pingreq' }
+		];
+		const bus = new EventEmitter({wildcard: true});
+		const fsm = fsmClient(bus).testState('sleep', CTX);
+		expect(fsm.next.timeout.mock.calls[0][0]).toEqual(CTX.sleepDuration * 1000);
+		PACKETS.forEach((p, n) => {
+			bus.emit(['snUnicastIngress', CTX.clientKey, p.cmd], p);
+			expect(fsm.next.timeout.mock.calls[n + 1][0]).toEqual(CTX.sleepDuration * 1000);
+		});
+	});
+	test('collect messages from broker and send them within ping request', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			sleepDuration: 1234
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const onPublishRes = jest.fn();
+		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], onPublishRes);
+		const onPingRsp = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'pingresp'], onPingRsp);
+		fsmClient(bus).testState('sleep', CTX);
+		const msg1 = {msgId: 123};
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], msg1);
+		expect(onPublishRes.mock.calls[0][0]).toMatchObject({
+			msgId: msg1.msgId,
+			clientKey: CTX.clientKey,
+			error: null
+		});
+		const msg2 = {msgId: 456};
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], msg2);
+		expect(onPublishRes.mock.calls[1][0]).toMatchObject({
+			msgId: msg2.msgId,
+			clientKey: CTX.clientKey,
+			error: null
+		});
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'pingreq']);
+		expect(fsmPublishToClient._run.mock.calls[0][0]).toBe(msg1);
+		fsmPublishToClient._run.mock.calls[0][1]();
+		expect(fsmPublishToClient._run.mock.calls[1][0]).toBe(msg2);
+		fsmPublishToClient._run.mock.calls[1][1]();
+		expect(onPingRsp.mock.calls[0][0]).toMatchObject({
+			clientKey: CTX.clientKey,
+			cmd: 'pingresp'
+		});
+	});
+	test('collect messages from broker and send them before entering active state', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			sleepDuration: 1234,
+			duration: 312
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const onPublishRes = jest.fn();
+		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], onPublishRes);
+		const onPingRsp = jest.fn();
+		bus.on(['snUnicastOutgress', CTX.clientKey, 'pingresp'], onPingRsp);
+		const fsm = fsmClient(bus).testState('sleep', CTX);
+		const msg = {msgId: 123};
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], msg);
+		expect(onPublishRes.mock.calls[0][0]).toMatchObject({
+			msgId: msg.msgId,
+			clientKey: CTX.clientKey,
+			error: null
+		});
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'connect'], {
+			duration: 543
+		});
+		expect(CTX.duration).toBe(543);
+		expect(fsmPublishToClient._run.mock.calls[0][0]).toBe(msg);
+		fsmPublishToClient._run.mock.calls[0][1]();
+		expect(fsm.next.mock.calls[0][0]).toEqual('active');
+	});
+	test('change sleep duration', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			sleepDuration: 1234
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const disconnect = {duration: 567};
+		const fsm = fsmClient(bus).testState('sleep', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'disconnect'], disconnect);
+		expect(CTX.sleepDuration).toBe(disconnect.duration);
+		expect(fsm.next.mock.calls[0][0]).toEqual('sleep');
+	});
+	test('disconnect', () => {
+		const CTX = {
+			clientKey: '::1_12345'
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const fsm = fsmClient(bus).testState('sleep', CTX);
+		bus.emit(['snUnicastIngress', CTX.clientKey, 'disconnect'], {duration: 0});
+		expect(fsm.next.mock.calls[0][0]).toBe(null);
+	});
+	test('destroy on broker disconnect', () => {
+		const CTX = {
+			clientKey: '::1_12345',
+			connectedToBroker: true
+		};
+		const bus = new EventEmitter({wildcard: true});
+		const fsm = fsmClient(bus).testState('sleep', CTX);
+		bus.emit(['brokerDisconnect', CTX.clientKey, 'notify']);
+		expect(CTX.connectedToBroker).toBe(false);
+		expect(fsm.next.mock.calls[0][0]).toBe(null);
 	});
 });
 
