@@ -17,9 +17,6 @@ module.exports = (bus, log) => {
 		ctx.connectedToBroker = false;
 		ctx.topics = [];
 
-		// Create promise for for conack
-		ctx.connack = new Promise((resolve) => { ctx.connackResolve = resolve; });
-
 		// Select next state depending on the will flag
 		if (ctx.will) next('willTopic');
 		else next('connectBroker');
@@ -41,13 +38,6 @@ module.exports = (bus, log) => {
 			// Connection was successfully established
 			ctx.sessionResumed = res.sessionResumed;
 			ctx.connectedToBroker = true;
-			const connack = {
-				clientKey: ctx.clientKey,
-				cmd: 'connack',
-				returnCode: 'Accepted'
-			};
-			ctx.connackResolve(connack);
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
 			ctx.connectedToClient = true;
 			next('active');
 		});
@@ -55,10 +45,29 @@ module.exports = (bus, log) => {
 		// The broker module must return at least a timeout!
 		// -> No next.timeout() in this state.
 	}).state('active', (ctx, i, o, next) => {
+		// Send connack
+		o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
+			clientKey: ctx.clientKey,
+			cmd: 'connack',
+			returnCode: 'Accepted'
+		});
+
+		// React to CONNECT requests, as well.
+		// They may be sent if our CONNACK hasn't be heard.
+		i(['snUnicastIngress', ctx.clientKey, 'connect'], (data) => {
+			// Update duration, all other options are ignored
+			ctx.duration = data.duration;
+			next('active');
+		});
+
 		// Listen for disconnects from client
 		i(['snUnicastIngress', ctx.clientKey, 'disconnect'], (data) => {
-			// TODO: duration? -> sleep instead of disconnect
-			next(null);
+			if (data.duration) {
+				ctx.sleepDuration = data.duration;
+				next('sleep');
+			} else {
+				next(null);
+			}
 		});
 
 		// Listen for disconnects from broker
@@ -104,7 +113,13 @@ module.exports = (bus, log) => {
 		i(['brokerPublishToClient', ctx.clientKey, 'req'], (data) => {
 			// Kick-off new state machine to handle publish messages
 			data.topics = ctx.topics;
-			publishToClientFactory.run(data);
+			publishToClientFactory.run(data, (err) => {
+				o(['brokerPublishToClient', ctx.clientKey, 'res'], {
+					clientKey: ctx.clientKey,
+					msgId: data.msgId,
+					error: (err instanceof Error) ? err.message : null
+				});
+			});
 		});
 
 		// TODO: Handle will updates
@@ -123,17 +138,81 @@ module.exports = (bus, log) => {
 		function timeoutTrigger () {
 			next.timeout(ctx.duration * 1000, new Error('Received no ping requests within given connection duration'));
 		}
+	}).state('sleep', (ctx, i, o, next) => {
+		// Send disconnect message to client to indicate it entered sleep state
+		o(['snUnicastOutgress', ctx.clientKey, 'disconnect'], {
+			clientKey: ctx.clientKey,
+			duration: ctx.sleepDuration,
+			cmd: 'disconnect'
+		});
+
+		// Timeout after given duration. This will be reset by any ingress packet.
+		i(['snUnicastIngress', ctx.clientKey, '*'], () => timeoutTrigger());
+		timeoutTrigger();
+		function timeoutTrigger () {
+			next.timeout(ctx.sleepDuration * 1000, new Error('Received no messages within given sleep duration'));
+		}
+
+		// Collect and store messages from the broker
+		if (!ctx.pendingMessages) ctx.pendingMessages = [];
+		function sendPendingMessages (onFinish) {
+			if (ctx.pendingMessages.length === 0) return onFinish();
+
+			// Get oldest message and send it to the client
+			const data = ctx.pendingMessages.shift();
+			publishToClientFactory.run(data, () => sendPendingMessages(onFinish));
+		}
+		i(['brokerPublishToClient', ctx.clientKey, 'req'], (data) => {
+			// Store message into pendingMessages and ack message
+			data.topics = ctx.topics;
+			ctx.pendingMessages.push(data);
+			o(['brokerPublishToClient', ctx.clientKey, 'res'], {
+				clientKey: ctx.clientKey,
+				msgId: data.msgId,
+				error: null
+			});
+		});
+
+		// React to ping requests
+		i(['snUnicastIngress', ctx.clientKey, 'pingreq'], () => {
+			sendPendingMessages(() => o(['snUnicastOutgress', ctx.clientKey, 'pingresp'], {
+				clientKey: ctx.clientKey,
+				cmd: 'pingresp'
+			}));
+		});
+
+		// Get back to active state on CONNECT
+		i(['snUnicastIngress', ctx.clientKey, 'connect'], (data) => {
+			// Update duration, all other options are ignored
+			ctx.duration = data.duration;
+			sendPendingMessages(() => next('active'));
+		});
+
+		i(['snUnicastIngress', ctx.clientKey, 'disconnect'], (data) => {
+			if (data.duration) {
+				// Set the sleep duration to another value
+				ctx.sleepDuration = data.duration;
+				next('sleep');
+			} else {
+				// Close the connection
+				next(null);
+			}
+		});
+
+		// Close connection if broker disconnects
+		i(['brokerDisconnect', ctx.clientKey, 'notify'], (data) => {
+			ctx.connectedToBroker = false;
+			next(null);
+		});
 	}).final((ctx, i, o, end, err) => {
 		if (!ctx.connectedToClient) {
 			// Send negative connack, since the error occured
 			// while establishing connection
-			const connack = {
+			o(['snUnicastOutgress', ctx.clientKey, 'connack'], {
 				clientKey: ctx.clientKey,
 				cmd: 'connack',
 				returnCode: 'Rejected: congestion'
-			};
-			ctx.connackResolve(connack);
-			o(['snUnicastOutgress', ctx.clientKey, 'connack'], connack);
+			});
 		} else {
 			// TODO: Check if error is not null?
 			//       -> Send last will

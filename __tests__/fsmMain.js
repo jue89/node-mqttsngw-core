@@ -40,31 +40,8 @@ describe('state: listening', () => {
 		bus.emit(['snUnicastIngress', CONNECT.clientKey, CONNECT.cmd], CONNECT);
 		expect(fsmClient._run.mock.calls[0][0]).toBe(CONNECT);
 		expect(Object.keys(CTX.clients)[0]).toBe(CONNECT.clientKey);
-	});
-	test('react on duplicate CONNECT messages', () => {
-		const CONNECT = {
-			clientKey: '::1_12345',
-			cmd: 'connect',
-			will: false,
-			cleanSession: true,
-			duration: 10,
-			clientId: 'client'
-		};
-		const CONNACK = {
-			clientKey: CONNECT.clientKey,
-			cmd: 'connack',
-			returnCode: 'Accepted'
-		};
-		const connack = { then: (fn) => fn(CONNACK) };
-		const CTX = { clients: {
-			'::1_12345': { ctx: { connack } }
-		} };
-		const bus = new EventEmitter({wildcard: true});
-		const onConnack = jest.fn();
-		bus.on(['snUnicastOutgress', CONNACK.clientKey, CONNACK.cmd], onConnack);
-		fsmMain(bus).testState('listening', CTX);
 		bus.emit(['snUnicastIngress', CONNECT.clientKey, CONNECT.cmd], CONNECT);
-		expect(onConnack.mock.calls[0][0]).toMatchObject(CONNACK);
+		expect(fsmClient._run.mock.calls.length).toBe(1);
 	});
 	test('remove client handle if the client disappears', () => {
 		const CONNECT = {
