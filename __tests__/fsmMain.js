@@ -55,6 +55,24 @@ describe('state: listening', () => {
 		fsmClient._run.mock.calls[0][1]();
 		expect(Object.keys(CTX.clients).length).toEqual(0);
 	});
+	test('remove client handle if some else uses the same clientId', () => {
+		const CONNECT1 = {
+			clientKey: '::1_12345',
+			cmd: 'connect',
+			clientId: 'abc'
+		};
+		const CONNECT2 = {
+			clientKey: '::1_12346',
+			cmd: 'connect',
+			clientId: 'abc'
+		};
+		const CTX = { clients: {}, enforceUniqueClientIds: true };
+		const bus = new EventEmitter({wildcard: true});
+		fsmMain(bus).testState('listening', CTX);
+		bus.emit(['snUnicastIngress', CONNECT1.clientKey, CONNECT1.cmd], CONNECT1);
+		bus.emit(['snUnicastIngress', CONNECT2.clientKey, CONNECT2.cmd], CONNECT2);
+		expect(fsmClient._next.mock.calls[0][0]).toBe(null);
+	})
 });
 
 describe('final', () => {
