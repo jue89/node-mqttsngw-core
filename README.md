@@ -11,6 +11,7 @@ mqttsngw.attach(Core(opts));
 
 Creates a new Core factory and attaches it to an existing instance of *mqttsngw*. ```opts``` has the following fields:
  * ```log```: Optional. An object containing logging callbacks for all log levels (```error```, ```warn```, ```info```, ```debug```). Every callback is called with a human-readable message as the first argument followed by an object containing more information regarding the event: ```{ error: (msg, info) => { ... }, ...}```.
+ * ```enforceUniqueClientIds```: If set to ```true```, existing connections will be disconnected if a new connection with the same MQTT Client ID is established.
 
 ## State Machines
 

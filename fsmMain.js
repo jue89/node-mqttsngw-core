@@ -11,15 +11,29 @@ module.exports = (bus, log) => {
 		ctx.clients = {};
 		next('listening');
 	}).state('listening', (ctx, i, o, next) => {
+		const clientByClientId = {};
+
 		// Listen for CONNECT messages from the sensor network
 		i(['snUnicastIngress', '*', 'connect'], (packet) => {
 			// Ignore CONNECT for existing connections.
 			if (ctx.clients[packet.clientKey]) return;
 
-			// New client -> new client instance
-			ctx.clients[packet.clientKey] = clientFactory.run(packet, () => {
+			// New client
+			// - Kill other instances with the same clientId
+			if (clientByClientId[packet.clientId]) {
+				clientByClientId[packet.clientId].next(null);
+			}
+			// - Kick-off new instance
+			const client = clientFactory.run(packet, () => {
 				delete ctx.clients[packet.clientKey];
+				if (clientByClientId[packet.clientId] === client) {
+					delete clientByClientId[packet.clientId];
+				}
 			});
+			ctx.clients[packet.clientKey] = client;
+			if (ctx.enforceUniqueClientIds) {
+				clientByClientId[packet.clientId] = client;
+			}
 		});
 		// TODO: SEARCHGW, ADVERTISE
 	}).final((ctx, i, o, end) => {
