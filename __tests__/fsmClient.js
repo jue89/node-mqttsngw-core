@@ -404,13 +404,33 @@ describe('state: active', () => {
 		}, PUBLISH));
 		const onRes = jest.fn();
 		bus.on(['brokerPublishToClient', CTX.clientKey, 'res'], onRes);
-		const err = new Error('foo');
-		fsmPublishToClient._run.mock.calls[0][1](err);
+		fsmPublishToClient._run.mock.calls[0][1](null);
 		expect(onRes.mock.calls[0][0]).toMatchObject({
 			clientKey: CTX.clientKey,
 			msgId: PUBLISH.msgId,
-			error: err.message
+			error: null
 		});
+	});
+	test('unsubscribe on congestion errors', (done) => {
+		const CTX = {
+			clientKey: '::1_12345'
+		};
+		const PUBLISH = {
+			clientKey: CTX.clientKey,
+			msgId: 123,
+			topic: 'test',
+			qos: 1,
+			payload: Buffer.alloc(1)
+		};
+		const bus = new EventEmitter();
+		fsmClient(bus).testState('active', CTX);
+		bus.emit(['brokerPublishToClient', CTX.clientKey, 'req'], PUBLISH);
+		bus.on(['brokerUnsubscribe', CTX.clientKey, 'req'], (pkt) => {
+			expect(pkt.topic).toEqual(PUBLISH.topic);
+			bus.emit(['brokerUnsubscribe', CTX.clientKey, 'res'], { msgId: pkt.msgId });
+			done();
+		});
+		fsmPublishToClient._run.mock.calls[0][1](new Error('Rejected: congestion'));
 	});
 });
 

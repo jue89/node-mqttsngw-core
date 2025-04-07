@@ -114,11 +114,28 @@ module.exports = (bus, log) => {
 			// Kick-off new state machine to handle publish messages
 			data.topics = ctx.topics;
 			publishToClientFactory.run(data, (err) => {
+				// Ack we've processed the message
 				o(['brokerPublishToClient', ctx.clientKey, 'res'], {
 					clientKey: ctx.clientKey,
 					msgId: data.msgId,
-					error: (err instanceof Error) ? err.message : null
+					// Yes ... we won't tell the broker something went wrong and handle this by ourselfes.
+					error: null
 				});
+
+				// On congestion: remove related subscription
+				if (err instanceof Error && err.message === 'Rejected: congestion') {
+					const onRes = (pkt) => {
+						if (pkt.msgId !== data.msgId) return;
+						bus.removeListener(['brokerUnsubscribe', ctx.clientKey, 'res'], onRes);
+					};
+					bus.on(['brokerUnsubscribe', ctx.clientKey, 'res'], onRes);
+
+					o(['brokerUnsubscribe', ctx.clientKey, 'req'], {
+						clientKey: ctx.clientKey,
+						msgId: data.msgId,
+						topic: data.topic
+					});
+				}
 			});
 		});
 
@@ -154,18 +171,18 @@ module.exports = (bus, log) => {
 		}
 
 		// Collect and store messages from the broker
-		if (!ctx.pendingMessages) ctx.pendingMessages = [];
+		const pendingMessages = [];
 		function sendPendingMessages (onFinish) {
-			if (ctx.pendingMessages.length === 0) return onFinish();
+			if (pendingMessages.length === 0) return onFinish();
 
 			// Get oldest message and send it to the client
-			const data = ctx.pendingMessages.shift();
+			const data = pendingMessages.shift();
 			publishToClientFactory.run(data, () => sendPendingMessages(onFinish));
 		}
 		i(['brokerPublishToClient', ctx.clientKey, 'req'], (data) => {
 			// Store message into pendingMessages and ack message
 			data.topics = ctx.topics;
-			ctx.pendingMessages.push(data);
+			pendingMessages.push(data);
 			o(['brokerPublishToClient', ctx.clientKey, 'res'], {
 				clientKey: ctx.clientKey,
 				msgId: data.msgId,
